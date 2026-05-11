@@ -1,0 +1,22 @@
+[workspace]
+members = ["lab16", "lab16_core"]
+resolver = "2"
+
+[workspace.dependencies]
+quick-xml = { version = "0.39", features = ["encoding","serialize"] }
+unicode-segmentation = "1.10"
+hashbrown = "0.17"
+regex = "1.10"
+clap = { version = "4.5", features = ["derive"] }
+anyhow = "1.0"
+llama-cpp-2 = {  version = "0.1.146", features = ["cuda"] }
+llama-cpp-sys-2 = {   version = "0.1.146", features = ["cuda"] }
+hf-hub = "0.5" # Rust SDK for Hugging Face
+indicatif = "0.18" # For a nice progress bar (optional but recommended for 9GB files)
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+ouroboros = "0.18"
+serde_json = "1.0.149"
+serde = { version = "1.0.228", features = ["derive"] }
+fb2 = "0.4"
+whatlang = "0.18"

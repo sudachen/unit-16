@@ -1,0 +1,12 @@
+[package]
+name = "lab16"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+lab16_core = { path = "../lab16_core" }
+clap = { workspace = true }
+anyhow = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
