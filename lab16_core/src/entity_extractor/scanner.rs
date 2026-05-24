@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use std::path::PathBuf;
 use quick_xml::events::Event;
 use quick_xml::reader::Reader;

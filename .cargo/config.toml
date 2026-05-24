@@ -1,5 +1,13 @@
 [target.x86_64-unknown-linux-gnu]
-rustflags = ["-L", "native=/usr/lib/x86_64-linux-gnu"]
+rustflags = [
+    "-L", "native=/usr/lib/x86_64-linux-gnu",
+    "-C", "target-cpu=native",
+    "-C", "link-arg=-lgomp"
+]
 
 [env]
 CMAKE_ARGS = "-DGGML_CUDA=ON"
+CUDAARCHS = "native"
+CUDA_PATH = "/usr/local/cuda"
+CUDACXX = "/usr/local/cuda/bin/nvcc"
+

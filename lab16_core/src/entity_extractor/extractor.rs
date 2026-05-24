@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use std::path::PathBuf;
 use anyhow::Result;
 use super::scanner::{EntityScanner, EntityEvidence};

@@ -1,9 +1,14 @@
 
-pub const PROMPT: &str = r#"
-
+pub const PROMPT_BEGIN: &str = r#"[INST] <<SYS>>
 You are a highly precise Data Extraction Agent. Your task is to analyze chapters from the novel.
-You must extract entities and structural components, maintaining strict relational integrity.
+You must extract entities and structural components from the following text, maintaining strict relational integrity.
+<</SYS>
+<<TEXT>>
+"#;
 
+pub const PROMPT_END: &str = r#"
+<</TEXT>>
+<<SYS>>
 CORE EXTRACTION RULES:
 1. OUTPUT LANGUAGE:
    - All names, locations, and races MUST be in Nominative Case and be in the same LANGUAGE as the novel text
@@ -66,5 +71,5 @@ A scene starts when there is a change in location, a significant time jump, or a
   "chapter_summary": "Global summary of the processed text"
 }
 <</SYS>>
-
+[/INST] JSON Output:
 "#;
