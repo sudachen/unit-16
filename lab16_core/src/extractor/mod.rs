@@ -1,45 +1,41 @@
 #![allow(unused_imports)]
 use crate::fb2scan::Fb2Scan;
-use crate::inference::{Model,ModelConfig};
+use crate::inference::{Model,ModelConfig,KVType};
+use crate::hf::ModelInfo;
+
 use anyhow::{Context as _, Result};
 use tracing::debug;
 mod prompts;
 
-const EXTRACTOR_LLM_MODEL: (&str, &str) = (
-    "bartowski/Mistral-Nemo-Instruct-2407-GGUF",
-    "Mistral-Nemo-Instruct-2407-Q5_K_M.gguf",
-);
 
-const EXTRACTOR_LLM_CONTEXT: u32 = 1024 * 20;
+const EXTRACTOR_LLM_MODEL: ModelInfo = ModelInfo {
+    repo: "bartowski/Mistral-Nemo-Instruct-2407-GGUF",
+    filename: "Mistral-Nemo-Instruct-2407-Q5_K_M.gguf",
+};
+
+const EXTRACTOR_LLM_CONTEXT: u32 = 16384;
 const EXTRACTOR_LLM_MAX_TOKENS: u32 = 4096;
 
 pub struct Extractor {
-    model: Option<Model>,
+    model: Model,
 }
 
 impl Extractor {
-    pub fn new() -> Self {
-        Self { model: None }
+    pub fn new() -> Result<Self> {
+        debug!("Initializing extractor model");
+        let config = ModelConfig::default().with_n_gpu_layers(1000);
+        let model = EXTRACTOR_LLM_MODEL.load(config)?;
+        Ok(Self { model })
     }
 
     pub fn extract(&mut self, fb2: Fb2Scan) -> Result<()> {
-        if self.model.is_none() {
-            debug!("Initializing extractor model");
-            let path = super::hf::get_or_download_model(
-                EXTRACTOR_LLM_MODEL.0,
-                EXTRACTOR_LLM_MODEL.1,
-            )?;
-            self.model = Some(ModelConfig::default().with_n_gpu_layers(1000).load_fom_file(path)?)
-        }
-
-        let model = self.model.as_mut().unwrap();
-
         debug!("Initializing entity extractor context");
         let mut context =
-            model
+            self.model
             .context()
-            .with_n_batch(EXTRACTOR_LLM_CONTEXT)
             .with_n_ctx(EXTRACTOR_LLM_CONTEXT)
+            .with_k_cache_hadamard()
+            .with_type_kv(KVType::Q4_0, KVType::Q5_0)
             .build()?;
 
         for section in fb2.sections() {

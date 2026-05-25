@@ -24,7 +24,7 @@ pub fn extract(args: ExtractArgs) -> Result<()> {
         .append(true)
         .open(args.output.unwrap_or("entities.json".into()))?;
 
-    let mut extractor = Extractor::new();
+    let mut extractor = Extractor::new()?;
     for (index, file) in args.input.iter().enumerate() {
         println!("  File {}: {:?}", index + 1, file);
         extractor.extract_from_file(file)?;

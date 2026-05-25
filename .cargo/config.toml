@@ -2,7 +2,9 @@
 rustflags = [
     "-L", "native=/usr/lib/x86_64-linux-gnu",
     "-C", "target-cpu=native",
-    "-C", "link-arg=-lgomp"
+    "-C", "link-arg=-lgomp",
+    "-C", "link-arg=-Wl,--disable-new-dtags",
+    "-C", "link-arg=-Wl,-rpath,$ORIGIN"
 ]
 
 [env]

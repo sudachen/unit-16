@@ -16,10 +16,10 @@ pub struct Context<'a>{
     vocab_ptr: *const ik_llama_cpp::llama_vocab,
     n_vocab: usize,
     initialized_logits: Vec<i32>,
-    //embeddings_enabled: bool,
     temperature: f32,
     top_k: i32,
     top_p: f32,
+    n_batch: u32,
     _lifetime: PhantomData<&'a Model>,
 }
 
@@ -44,17 +44,31 @@ impl<'a> Context<'a> {
 
 
     pub fn inference(&mut self, prompt: &str, max_tokens: u32) -> Result<String> {
+        let _scope = nvtx::range!("Inference");
+        
         let tokens_list = self.str_to_token(prompt, true, true)?;
-        let mut batch = Batch::new(tokens_list.len(), 1);
-
+        let n_batch = self.n_batch as usize;
+        let mut batch = Batch::new(n_batch, 1);
         let last_index = (tokens_list.len() - 1) as i32;
-        for (i, token) in tokens_list.iter().enumerate() {
-            batch.add(*token, i as i32, &[0], i as i32 == last_index)?;
+
+
+        {
+            let _range = nvtx::range!("Inference Prefill");
+            for (chunk_idx, chunk) in tokens_list.chunks(n_batch).enumerate() {
+                batch.clear();
+                for (token_idx, token) in chunk.iter().enumerate() {
+                    let absolute_pos = (chunk_idx * n_batch + token_idx) as i32;
+                    let is_last_token = absolute_pos == last_index;
+                    batch.add(*token, absolute_pos, &[0], is_last_token)?;
+                }
+                self.decode(&mut batch)?;
+            }
         }
 
-        self.decode(&mut batch)?;
         let mut n_cur = tokens_list.len() as i32;
         let mut response_bytes: Vec<u8> = Vec::new();
+
+        let _range = nvtx::range!("Inference Decode");
 
         for _ in 0..max_tokens {
             let token = self.sample(batch.n_tokens()-1)?;
@@ -85,14 +99,14 @@ impl<'a> Context<'a> {
     pub fn sample(&mut self, logit_idx: i32) -> Result<ik_llama_cpp::llama_token> {
         unsafe {
             let logits_ptr = ik_llama_cpp::llama_get_logits_ith(self.ctx, logit_idx);
-            let mut candidates_vec = Vec::with_capacity(self.n_vocab);
-            for id in 0..self.n_vocab {
-                candidates_vec.push(ik_llama_cpp::llama_token_data {
-                    id: id as i32,
-                    logit: *logits_ptr.add(id),
+            let logits = std::slice::from_raw_parts(logits_ptr, self.n_vocab);
+            let mut candidates_vec: Vec<ik_llama_cpp::llama_token_data> = (0..self.n_vocab)
+                .map(|id| ik_llama_cpp::llama_token_data {
+                    id: id as ik_llama_cpp::llama_token,
+                    logit: logits[id],
                     p: 0.0,
-                });
-            }
+                })
+                .collect();
 
             let mut candidates_array = ik_llama_cpp::llama_token_data_array {
                 data: candidates_vec.as_mut_ptr(),
@@ -100,22 +114,6 @@ impl<'a> Context<'a> {
                 selected: 0,
                 sorted: false,
             };
-
-            /*if !self.prev_tokens.is_empty() && self.penalty_repeat > 1.0 {
-                // Берем последние 64 токена из истории (или сколько есть)
-                let last_n = std::cmp::min(self.prev_tokens.len(), 64);
-                let start_ptr = self.prev_tokens.as_ptr().add(self.prev_tokens.len() - last_n);
-
-                llama_sample_repetition_penalties(
-                    ctx,
-                    &mut candidates_array,
-                    start_ptr,
-                    last_n,
-                    self.penalty_repeat,
-                    0.0, // frequency penalty
-                    0.0, // presence penalty
-                );
-            }*/
 
             let token_id = if self.temperature <= 0.0 {
                 ik_llama_cpp::llama_sample_token_greedy(self.ctx, &mut candidates_array)
@@ -126,7 +124,6 @@ impl<'a> Context<'a> {
                 ik_llama_cpp::llama_sample_token(self.ctx, &mut candidates_array)
             };
 
-            //self.prev_tokens.push(token_id);
             Ok(token_id)
         }
     }
@@ -225,6 +222,18 @@ impl<'a> Context<'a> {
 pub struct Builder<'a> {
     model: &'a mut Model,
     params: ik_llama_cpp::llama_context_params,
+    temperature: f32,
+    top_k: i32,
+    top_p: f32,
+}
+
+#[repr(u32)]
+pub enum KVType {
+    Q4_0 = ik_llama_cpp::GGML_TYPE_Q4_0,
+    Q5_0 = ik_llama_cpp::GGML_TYPE_Q5_0,
+    Q8_0 = ik_llama_cpp::GGML_TYPE_Q8_0,
+    F16  = ik_llama_cpp::GGML_TYPE_F16,
+    F32  = ik_llama_cpp::GGML_TYPE_F32,
 }
 
 impl<'a> Builder<'a> {
@@ -232,6 +241,9 @@ impl<'a> Builder<'a> {
         Self {
             model,
             params: unsafe { ik_llama_cpp::llama_context_default_params() },
+            temperature: 0.0,
+            top_k: 0,
+            top_p: 0.0,
         }
     }
 
@@ -242,6 +254,30 @@ impl<'a> Builder<'a> {
 
     pub fn with_n_batch(mut self, n_batch: u32) -> Self {
         self.params.n_batch = n_batch;
+        self
+    }
+
+    pub fn with_flash_attn(mut self) -> Self {
+        self.params.flash_attn = true;
+        self
+    }
+
+    pub fn with_type_kv(mut self, type_k: KVType, type_v: KVType) -> Self {
+        self.params.flash_attn = true;
+        self.params.type_k = type_k as u32;
+        self.params.type_v = type_v as u32;
+        self
+    }
+
+    pub fn with_k_cache_hadamard(mut self) -> Self {
+        self.params.k_cache_hadamard = true;
+        self
+    }
+
+    pub fn with_sampler(mut self, temperature: f32, top_k: i32, top_p: f32) -> Self {
+        self.temperature = temperature;
+        self.top_k = top_k;
+        self.top_p = top_p;
         self
     }
 
@@ -256,10 +292,10 @@ impl<'a> Builder<'a> {
             n_vocab: unsafe { ik_llama_cpp::llama_n_vocab(model_ptr) } as usize,
             vocab_ptr: unsafe { ik_llama_cpp::llama_model_get_vocab(model_ptr) },
             initialized_logits: vec![],
-            //embeddings_enabled: false,
-            temperature: 0.0,
-            top_k: 0,
-            top_p: 0.0,
+            temperature: self.temperature,
+            top_k: self.top_k,
+            top_p: self.top_p,
+            n_batch: self.params.n_batch,
             _lifetime: Default::default(),
         })
     }

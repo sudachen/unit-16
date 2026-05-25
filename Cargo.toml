@@ -3,14 +3,13 @@ members = ["ik_llama_cpp","lab16", "lab16_core"]
 resolver = "2"
 
 [workspace.dependencies]
+ik_llama_cpp = { path = "ik_llama_cpp" }
 quick-xml = { version = "0.39", features = ["encoding","serialize"] }
 unicode-segmentation = "1.10"
 hashbrown = "0.17"
 regex = "1.10"
 clap = { version = "4.5", features = ["derive"] }
 anyhow = "1.0"
-#llama-cpp-2 = {  version = "0.1.146", features = ["cuda"] }
-#llama-cpp-sys-2 = {   version = "0.1.146", features = ["cuda"] }
 hf-hub = "0.5" # Rust SDK for Hugging Face
 indicatif = "0.18" # For a nice progress bar (optional but recommended for 9GB files)
 tracing = "0.1"
@@ -26,4 +25,5 @@ glob = "0.3.3"
 walkdir = "2.5.0"
 find_cuda_helper = "0.2.0"
 cc = "1.2.62"
-ik_llama_cpp = { path = "ik_llama_cpp" }
+nvtx = "1.3"
+

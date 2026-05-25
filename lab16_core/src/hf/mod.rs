@@ -2,6 +2,24 @@ use hf_hub::api::sync::ApiBuilder;
 use std::path::PathBuf;
 use tracing::debug;
 
+use crate::inference::{ModelConfig, Model};
+
+pub struct ModelInfo {
+    pub repo: &'static str,
+    pub filename: &'static str,
+}
+
+impl ModelInfo {
+    pub fn get_or_download(&self) -> anyhow::Result<PathBuf> {
+        get_or_download_model(self.repo, self.filename)
+    }
+
+    pub fn load(&self, cfg :ModelConfig) -> anyhow::Result<Model>{
+        let path = self.get_or_download()?;
+        cfg.load_fom_file(path)
+    }
+}
+
 pub fn get_or_download_model(repo: &str, filename: &str) -> anyhow::Result<PathBuf> {
     // This will use default HF cache directory (~/.cache/huggingface/hub)
     let api = ApiBuilder::new()
